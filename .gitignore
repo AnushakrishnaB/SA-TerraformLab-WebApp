@@ -1,0 +1,19 @@
+# Terraform working directory
+**/.terraform/
+
+# Terraform state and crash logs
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Local variables and credentials
+*.tfvars
+*.tfvars.json
+.env
+*.pem
+*.key
+
+# Downloaded Terraform binaries
+terraform.exe
+terraform_*/
