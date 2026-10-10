@@ -45,31 +45,19 @@ variable "networks" {
 variable "webapp_plan" {
   description = "Name of the App Service Plan"
   type        = string
-  sensitive   = true
+
 }
 
 variable "webapp_service" {
   description = "Name of the App Service"
   type        = string
-  sensitive   = true
+
 }
 
 variable "app_service_sku" {
   description = "SKU for the App Service Plan"
   type        = string
 
-}
-
-variable "app_subnet_name" {
-  description = "Subnet used for App Service VNet Integration"
-  type        = string
-  default     = "snet-app-prod"
-}
-
-variable "private_endpoint_subnet_name" {
-  description = "Subnet used for the App Service Private Endpoint"
-  type        = string
-  default     = "snet-endpoint-prod"
 }
 
 variable "private_dns_zone_name" {
