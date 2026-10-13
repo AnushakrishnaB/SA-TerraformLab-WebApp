@@ -65,3 +65,44 @@ variable "private_dns_zone_name" {
   type        = string
   default     = "privatelink.azurewebsites.net"
 }
+
+
+variable "app_gateway_name" {
+  description = "Name of the Azure Application Gateway"
+  type        = string
+}
+
+variable "app_gateway_public_ip_name" {
+  description = "Name of the public IP used by Application Gateway"
+  type        = string
+}
+
+variable "app_gateway_sku_name" {
+  description = "SKU for Application Gateway"
+  type        = string
+  default     = "Standard_v2"
+}
+
+variable "app_gateway_min_capacity" {
+  description = "Minimum number of Application Gateway instances"
+  type        = number
+  default     = 1
+}
+
+variable "app_gateway_max_capacity" {
+  description = "Maximum number of Application Gateway instances"
+  type        = number
+  default     = 2
+}
+
+variable "app_gateway_certificate_path" {
+  description = "Local path to the Application Gateway PFX certificate"
+  type        = string
+  default     = "certs/agw-lab.pfx"
+}
+
+variable "app_gateway_certificate_password" {
+  description = "Password protecting the Application Gateway PFX certificate"
+  type        = string
+  sensitive   = true
+}
