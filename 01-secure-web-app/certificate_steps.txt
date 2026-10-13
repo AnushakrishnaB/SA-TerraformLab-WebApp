@@ -1,0 +1,89 @@
+## Generating a Self-Signed TLS Certificate
+
+A self-signed TLS certificate was generated using PowerShell on Windows for the Azure Application Gateway HTTPS listener.
+
+### Step 1: Generate the certificate
+
+Run PowerShell from the project directory and create a certificate for the Application Gateway hostname.
+
+```powershell
+$cert = New-SelfSignedCertificate `
+  -DnsName "appgw-lab.example.com" `
+  -CertStoreLocation "Cert:\CurrentUser\My" `
+  -FriendlyName "Azure Application Gateway Lab" `
+  -NotAfter (Get-Date).AddMonths(12) `
+  -KeyAlgorithm RSA `
+  -KeyLength 2048 `
+  -HashAlgorithm SHA256
+```
+
+**Configuration details:**
+
+- `-DnsName`: Hostname associated with the certificate.
+- `-CertStoreLocation`: Stores the certificate in the current Windows user's certificate store.
+- `-NotAfter`: Sets the certificate expiration date to 12 months from creation.
+- `-KeyAlgorithm RSA`: Uses RSA for the certificate's key.
+- `-KeyLength 2048`: Generates a 2048-bit RSA key.
+- `-HashAlgorithm SHA256`: Uses SHA-256 for signing.
+
+### Step 2: Export the certificate as a PFX file
+
+Application Gateway requires the certificate and private key in a PFX file for this Terraform configuration.
+
+```powershell
+$pfxPassword = Read-Host "Enter a PFX password" -AsSecureString
+
+Export-PfxCertificate `
+  -Cert $cert `
+  -FilePath ".\appgw-lab.pfx" `
+  -Password $pfxPassword
+```
+
+Enter a strong password when prompted. This password is required when importing the certificate into Application Gateway.
+
+### Step 3: Configure Terraform variables
+
+Configure the following variables in the local `terraform.tfvars` file:
+
+```hcl
+app_gateway_certificate_path     = "appgw-lab.pfx"
+app_gateway_certificate_password = "YOUR_PFX_PASSWORD"
+```
+
+The certificate is loaded into the Application Gateway resource using:
+
+```hcl
+ssl_certificate {
+  name     = "lab-tls-certificate"
+  data     = filebase64(var.app_gateway_certificate_path)
+  password = var.app_gateway_certificate_password
+}
+```
+
+The `filebase64()` function reads the PFX file and encodes its contents for the AzureRM provider.
+
+### Step 4: Verify the certificate and PFX file
+
+Verify the certificate details:
+
+```powershell
+Get-ChildItem Cert:\CurrentUser\My |
+  Where-Object { $_.Thumbprint -eq $cert.Thumbprint } |
+  Format-List Subject, Issuer, NotAfter, Thumbprint
+```
+
+Verify that the PFX file exists:
+
+```powershell
+Get-Item .\appgw-lab.pfx
+```
+
+### Step 5: Security considerations
+
+- A self-signed certificate is suitable for lab testing but is not automatically trusted by browsers.
+- The certificate hostname must match the hostname used to access the Application Gateway for proper hostname validation.
+- Do not commit the PFX file, private key, or certificate password to GitHub.
+- Add the certificate file and secret-bearing `terraform.tfvars` file to `.gitignore`.
+- Use a trusted certificate authority (CA)-issued certificate for production deployments.
+
+**Outcome:** Generated a PFX certificate containing the certificate and private key, ready for use by the Application Gateway HTTPS listener.
