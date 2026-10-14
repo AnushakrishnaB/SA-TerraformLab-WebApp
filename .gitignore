@@ -17,3 +17,9 @@ crash.*.log
 # Downloaded Terraform binaries
 terraform.exe
 terraform_*/
+
+# Local TLS certificates and private keys
+certs/
+*.pfx
+*.p12
+*.key

@@ -1,0 +1,63 @@
+Check current role assignments:
+**********************************************
+az role assignment list `
+  --assignee (az ad signed-in-user show --query id -o tsv) `
+  --scope (az storage account show --name "storagereptestac" --resource-group "rg-storage-replication-lab" --query id -o tsv) `
+  --include-inherited `
+  --query "[].{role:roleDefinitionName,scope:scope}" `
+  --output table
+
+
+Assign storage blob data reader role:
+******************************************
+$account = "storagereptestac"
+$rg = "rg-storage-replication-lab"
+
+$accountId = az storage account show `
+  --name $account `
+  --resource-group $rg `
+  --query id -o tsv
+
+$userId = az ad signed-in-user show --query id -o tsv
+
+az role assignment create `
+  --assignee-object-id $userId `
+  --assignee-principal-type User `
+  --role "Storage Blob Data Reader" `
+  --scope $accountId
+
+
+
+Replication status check:
+**************************************
+az storage account show `
+  --name "storagereptestac" `
+  --resource-group "rg-storage-replication-lab" `
+  --expand geoReplicationStats `
+  --query "{sku:sku.name, primary:primaryLocation, secondary:secondaryLocation, status:geoReplicationStats.status, lastSyncTime:geoReplicationStats.lastSyncTime}" `
+  --output json
+
+  Read file from secondary endpoint:
+  ********************************************
+  $container = "replication-test"
+$blob = "replication-test.txt"  # Replace with your actual filename
+
+$secondaryEndpoint = "https://$account-secondary.blob.core.windows.net"
+
+az storage blob list `
+  --account-name $account `
+  --blob-endpoint $secondaryEndpoint `
+  --container-name $container `
+  --auth-mode login `
+  --query "[].name" `
+  --output table
+
+  Confirm the actual contents:
+  ****************************************
+  az storage blob download `
+  --account-name $account `
+  --blob-endpoint $secondaryEndpoint `
+  --container-name $container `
+  --name $blob `
+  --file ".\secondary-copy.txt" `
+  --auth-mode login
