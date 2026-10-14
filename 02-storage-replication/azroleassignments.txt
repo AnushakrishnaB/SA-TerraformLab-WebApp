@@ -37,8 +37,8 @@ az storage account show `
   --query "{sku:sku.name, primary:primaryLocation, secondary:secondaryLocation, status:geoReplicationStats.status, lastSyncTime:geoReplicationStats.lastSyncTime}" `
   --output json
 
-  Read file from secondary endpoint:
-  ********************************************
+Read file from secondary endpoint:
+********************************************
   $container = "replication-test"
 $blob = "replication-test.txt"  # Replace with your actual filename
 
