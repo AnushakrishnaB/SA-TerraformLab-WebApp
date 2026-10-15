@@ -4,69 +4,71 @@
 
 This project demonstrates how to deploy and secure an Azure web application using Terraform and Azure networking services.
 
-The goal is to build a web application that is publicly accessible through Azure Application Gateway while keeping the App Service backend accessible through a private endpoint.
+The goal is to make the web application accessible through Azure Application Gateway while keeping the App Service backend accessible through a private endpoint and disabling direct public access to App Service.
 
-The infrastructure is deployed using Terraform to practice Infrastructure as Code (IaC), Azure networking, private connectivity, HTTPS, DNS resolution, application health monitoring, and traffic routing.
+The infrastructure is defined using Terraform to explore Infrastructure as Code (IaC), Azure networking, private connectivity, HTTPS, DNS resolution, backend health probing, and traffic routing.
 
-**Project type:** Azure Architecture / Infrastructure as Code  
-**Cloud provider:** Microsoft Azure  
-**IaC tool:** Terraform  
-**Language:** HCL  
-**Application platform:** Azure App Service (Linux)
+- **Project type:** Azure architecture / Infrastructure as Code
+- **Cloud provider:** Microsoft Azure
+- **IaC tool:** Terraform
+- **Language:** HCL
+- **Application platform:** Azure App Service (Linux)
 
 ## 2. Architecture
 
 ### High-level architecture
 
+The following describes the intended traffic paths. App Service is a platform-as-a-service (PaaS) resource outside the virtual network boundary. Its private endpoint is placed inside the VNet in the dedicated endpoint subnet.
+
 ```text
                          Internet
                             |
-                            | HTTPS / 443
+                         HTTPS / 443
+                            |
                             v
-                 Azure Public IP Address
+                   Azure Public IP
                             |
                             v
                  Azure Application Gateway
-                    HTTPS Listener
-                    TLS Certificate
-                    Request Routing Rule
-                    Health Probe
+                 - HTTPS listener and certificate
+                 - Routing rule
+                 - Backend health probe
                             |
-                            | HTTPS / 443
-                            v
-                     Azure VNet
-                            |
-                  Private Endpoint Subnet
+                     HTTPS / 443
                             |
                             v
-                  App Service Private Endpoint
+                App Service Private Endpoint
+                   (endpoint subnet in VNet)
                             |
                             v
-                     Azure App Service
-                      Linux Web App
+                 Azure App Service (Linux)
+                  Public access disabled
 
 
-       Linux Test VM --------> Private Endpoint
-              |
-              +--------------> Internet (outbound test)
+  Linux test VM (test subnet in VNet)
+       |                         |
+       | HTTPS to App Service    | Outbound HTTPS test
+       v                         v
+  Private Endpoint             Internet
 
-       Private DNS Zone:
-       privatelink.azurewebsites.net
+  Private DNS zone:
+  privatelink.azurewebsites.net
+  (linked to the VNet)
 ```
 
-The Linux test VM is used to validate private DNS resolution and connectivity to the App Service.
+The Linux test VM is used to validate private DNS resolution and access to App Service through its private endpoint. The VM's outbound HTTPS test is separate from App Service VNet Integration.
 
 ### Traffic flow
 
-1. A user connects to the Application Gateway through its public IP address.
-2. The HTTPS listener accepts the incoming connection and uses the configured TLS certificate.
+1. A user connects to the public IP address of Application Gateway.
+2. The HTTPS listener accepts the connection using its configured TLS certificate.
 3. The routing rule forwards the request to the App Service backend pool.
-4. The gateway resolves the App Service hostname using the configured DNS arrangement.
+4. Application Gateway resolves the App Service hostname using the configured DNS arrangement.
 5. The backend hostname resolves to the private endpoint IP address.
-6. The gateway connects to the App Service over HTTPS.
-7. The gateway health probe monitors the backend's availability.
+6. Application Gateway connects to App Service over HTTPS.
+7. The configured health probe checks the backend according to its path and expected status codes.
 
-The private endpoint provides private inbound connectivity to the App Service. App Service VNet integration is a separate feature that allows the web application to access supported resources in the virtual network for outbound connections.
+The **Private Endpoint** provides private inbound connectivity to App Service. **App Service VNet Integration** is a separate feature that allows the application to make outbound connections into the virtual network. VNet Integration is configured in this lab, but it requires a separate outbound-to-private-resource test to validate its behavior.
 
 ## 3. Azure Resources
 
@@ -74,62 +76,66 @@ The private endpoint provides private inbound connectivity to the App Service. A
 |---|---|---|
 | Resource Group | `rg-azlab-web-prod` | Contains the lab resources |
 | Virtual Network | `vnet-azlab-prod` | Provides private network connectivity |
-| App Service subnet | `snet-app-prod` | Application-related network resources |
+| App Service integration subnet | `snet-app-prod` | Subnet delegated for App Service VNet Integration |
 | Application Gateway subnet | `snet-gateway-prod` | Dedicated subnet for Application Gateway |
 | Private Endpoint subnet | `snet-endpoint-prod` | Hosts the App Service private endpoint |
+| Linux test VM subnet | As defined in Terraform | Provides a test location inside the VNet |
 | App Service Plan | `asp-azlab-web` | Provides compute resources for the web application |
 | Linux Web App | `app-azlab-web` | Hosts the web application |
-| Private Endpoint | `pe-app-azlab-web` | Provides private access to the App Service |
+| Private Endpoint | `pe-app-azlab-web` | Provides private access to App Service |
 | Application Gateway | `agw-azlab-web-prod` | Provides the public HTTPS entry point and routes traffic |
 | Public IP | `pip-agw-azlab-web-prod` | Provides public access to Application Gateway |
 | Private DNS Zone | `privatelink.azurewebsites.net` | Supports private name resolution for App Service |
 | Linux Test VM | `vm-azlab-test` | Used to test private connectivity and outbound access |
 
-### Important network addresses observed during testing
+### Network addresses observed during testing
 
-- Private endpoint IP: `10.10.3.4`
-- Linux test VM IP: `10.10.4.4`
-- Application Gateway public IP observed during testing: `4.205.12.93`
-- App Service hostname: `app-azlab-web.azurewebsites.net`
+- **Private endpoint IP:** `10.10.3.4`
+- **Linux test VM IP:** `10.10.4.4`
+- **Application Gateway public IP observed during testing:** `4.205.12.93`
+- **App Service hostname:** `app-azlab-web.azurewebsites.net`
 
-These are lab observations, not guaranteed permanent addresses. Recheck them after recreating the infrastructure.
+These are observations from this lab deployment, not guaranteed permanent addresses. Recheck them after recreating the infrastructure. Document the VNet address space and each subnet's CIDR range from the actual Terraform configuration when updating this README.
 
 ## 4. Terraform Project Structure
 
-Project directory:
+Project directory, relative to the repository root:
 
-`Terraform-Azure -Lab/01-secure-web-app`
+`01-secure-web-app/`
 
-Expected Terraform files:
+Expected project files (confirm against the current directory if files are added, removed, or renamed):
 
 ```text
 01-secure-web-app/
+├── README.md
 ├── main.tf
 ├── network.tf
+├── application_gateway.tf
 ├── variables.tf
 ├── provider.tf
 ├── outputs.tf
-├── terraform.tfvars       # Local configuration; do not commit secrets
+├── test_vm.tf
 ├── .gitignore
-└── README.md
+└── terraform.tfvars       # Local configuration; do not commit
 ```
 
 File responsibilities:
 
-- **`provider.tf`** — Configures Terraform and the AzureRM provider.
-- **`variables.tf`** — Declares configurable values such as resource names, locations, SKU settings, and certificate paths.
-- **`main.tf`** — Defines the main application and related infrastructure resources.
-- **`network.tf`** — Defines the virtual network, subnets, and networking resources.
-- **`outputs.tf`** — Exposes useful values such as the gateway public IP and private endpoint IP.
-- **`terraform.tfvars`** — Supplies local variable values. Keep credentials and secrets out of source control.
-- **`.gitignore`** — Excludes generated files, local state, and sensitive configuration files from Git.
-- **`application_gateway.tf`** — application gateway configuration file
+- `provider.tf` — Configures Terraform and the AzureRM provider.
+- `variables.tf` — Declares configurable values such as resource names, locations, SKU settings, and certificate paths.
+- `main.tf` — Defines the main application and related infrastructure resources.
+- `network.tf` — Defines the virtual network, subnets, private endpoint, and DNS resources.
+- `application_gateway.tf` — Defines Application Gateway, its frontend, listener, backend, health probe, and routing configuration.
+- `test_vm.tf` — Defines the Linux test VM and its network interface.
+- `outputs.tf` — Exposes useful values, such as the gateway public IP and private endpoint IP, where configured.
+- `terraform.tfvars` — Supplies local variable values. Keep credentials and secrets out of source control.
+- `.gitignore` — Should exclude generated files, local state, saved plans, local variable files, and sensitive certificate material.
 
-The exact distribution of resources between `main.tf` and `network.tf` may evolve as the project grows.
+The exact distribution of resources across Terraform files may evolve as the project grows.
 
 ## 5. Prerequisites
 
-Before deploying the infrastructure, ensure the following are available:
+Before deploying the infrastructure, ensure that you have:
 
 - An Azure subscription.
 - Azure CLI installed and authenticated.
@@ -141,32 +147,32 @@ Before deploying the infrastructure, ensure the following are available:
 
 Authenticate to Azure:
 
-```powershell
+```bash
 az login
 az account show
 ```
 
 Select the intended subscription if necessary:
 
-```powershell
+```bash
 az account set --subscription "<SUBSCRIPTION_ID>"
 ```
 
 Verify Terraform:
 
-```powershell
+```bash
 terraform version
 ```
 
-Never commit subscription secrets, certificate passwords, private keys, Terraform state files, or sensitive `.tfvars` files to a public repository.
+Never commit subscription secrets, certificate passwords, private keys, Terraform state files, saved plan files, or sensitive `.tfvars` files to a public repository.
 
 ## 6. Deployment Workflow
 
-Run the following commands from the project directory.
+Run these commands from the `01-secure-web-app` directory.
 
 ### Step 1 — Initialize Terraform
 
-```powershell
+```bash
 terraform init
 ```
 
@@ -174,7 +180,7 @@ Downloads the required providers and initializes the working directory.
 
 ### Step 2 — Format the configuration
 
-```powershell
+```bash
 terraform fmt -recursive
 ```
 
@@ -182,7 +188,7 @@ Formats Terraform files consistently.
 
 ### Step 3 — Validate the configuration
 
-```powershell
+```bash
 terraform validate
 ```
 
@@ -190,15 +196,15 @@ Checks whether the Terraform configuration is syntactically valid and internally
 
 ### Step 4 — Review the deployment plan
 
-```powershell
+```bash
 terraform plan -out=tfplan
 ```
 
-Review the resources Terraform intends to create, modify, or destroy before proceeding.
+Review the resources Terraform intends to create, modify, or destroy before proceeding. Treat saved plan files as potentially sensitive and do not commit them.
 
 ### Step 5 — Apply the configuration
 
-```powershell
+```bash
 terraform apply tfplan
 ```
 
@@ -206,7 +212,7 @@ Creates or updates the Azure infrastructure according to the saved plan.
 
 ### Step 6 — Review outputs
 
-```powershell
+```bash
 terraform output
 ```
 
@@ -214,134 +220,128 @@ Use the outputs to identify the gateway public IP, private endpoint IP, and appl
 
 ### Step 7 — Inspect deployed resources
 
-Use the Azure portal or Azure CLI to confirm that resources are provisioned successfully and that the Application Gateway backend health is reported as healthy.
+Use the Azure portal or Azure CLI to confirm that resources are provisioned successfully and that Application Gateway reports the backend as healthy.
 
 ## 7. Connectivity and Validation Tests
 
-The lab was tested on October 13, 2026.
+The lab was tested on **October 13, 2026**. Results below reflect the tests performed at that time and may need to be repeated after redeployment or configuration changes.
 
 ### Test 1 — App Service private DNS resolution
 
 **Objective:** Verify that the App Service hostname resolves to the private endpoint address from the Linux test VM.
 
-Expected command:
+Command:
 
 ```bash
 nslookup app-azlab-web.azurewebsites.net
 ```
 
-Observed result:
+**Observed result:** Resolved address `10.10.3.4`
 
-```text
-Resolved address: 10.10.3.4
-```
-
-**Result: PASS**
+**Result:** PASS
 
 The hostname resolved to the private endpoint IP address. This validates private DNS resolution from the test VM.
 
-### Test 2 — Access the App Service through its private endpoint
+### Test 2 — Access App Service through its private endpoint
 
-**Objective:** Confirm that the test VM can reach the App Service using its hostname.
+**Objective:** Confirm that the test VM can reach App Service using its hostname.
 
 ```bash
 curl -I https://app-azlab-web.azurewebsites.net
 ```
 
-Observed result: HTTP 200.
+**Observed result:** HTTP 200
 
-**Result: PASS**
+**Result:** PASS
 
-The test VM successfully reached the App Service through the private endpoint path.
+The test VM successfully reached App Service through the private endpoint path.
 
 ### Test 3 — Direct public App Service access
 
-**Objective:** Check whether the App Service is accessible through its public hostname.
+**Objective:** Check whether App Service is accessible through its public hostname.
 
-Observed result: HTTP 403 when accessing the App Service directly through its public endpoint.
+**Observed result:** HTTP 403 when accessing App Service directly through its public endpoint.
 
-**Result: PASS for the intended access restriction**
+**Result:** PASS for the intended access restriction
 
-The public endpoint rejected the tested request. This is consistent with the goal of restricting direct public access to the App Service.
-
-Note: An HTTP 403 alone does not identify the exact policy responsible. Confirm the App Service networking settings and access restrictions to establish why the request was rejected.
+The tested public request was rejected, consistent with the goal of restricting direct public access to App Service. An HTTP 403 alone does not identify the exact policy responsible; confirm the App Service networking settings and access restrictions to establish why the request was rejected.
 
 ### Test 4 — Application Gateway backend health
 
-**Objective:** Confirm that the gateway can reach the App Service backend.
+**Objective:** Confirm that Application Gateway can reach the App Service backend.
 
-Observed result: The backend was reported as **Healthy**.
+**Observed result:** The backend was reported as Healthy.
 
-**Result: PASS**
+**Result:** PASS
 
-The gateway's health probe was able to validate the configured backend according to its probe settings.
+The configured health probe reported the backend as healthy according to its probe settings.
 
 ### Test 5 — Access the application through Application Gateway
 
 **Objective:** Validate the public gateway-to-backend traffic path.
 
-Observed result: The gateway endpoint returned HTTP 200 and displayed the App Service default welcome page.
+**Observed result:** The gateway endpoint returned HTTP 200 and displayed the App Service default welcome page.
 
-**Result: PASS, with a certificate-validation caveat**
+**Result:** PASS, with a certificate-validation caveat
 
-Certificate validation was bypassed during the test. Therefore, the result confirms application reachability and an HTTP response, but does not establish that the certificate is trusted or that hostname validation is correct.
+Certificate validation was bypassed during the test. Therefore, this confirms application reachability and an HTTP response, but does not establish that the certificate is trusted or that hostname validation is correct.
 
-For a production-ready test, use a certificate trusted by the client and verify the intended DNS hostname without disabling certificate validation.
+For a production-oriented test, use a certificate trusted by the client and verify the intended gateway DNS hostname without disabling certificate validation.
 
 ### Test 6 — Outbound internet connectivity from the Linux VM
 
 **Objective:** Verify that the VM can establish an outbound HTTPS connection.
 
-Tested destination: Google over HTTPS.
+**Tested destination:** Google over HTTPS.
 
-Observed result: The outbound HTTPS test succeeded.
+**Observed result:** The outbound HTTPS test succeeded.
 
-**Result: PASS**
+**Result:** PASS
 
-This confirms outbound connectivity for the tested destination. It does not prove that all outbound destinations or protocols are allowed.
+This confirms outbound connectivity for the tested destination from the Linux VM. It does not prove that all outbound destinations or protocols are allowed, and it does not validate App Service VNet Integration.
 
 ### Test summary
 
 | Test | Result |
 |---|---|
-| Private DNS resolution | PASS |
-| VM to App Service over private endpoint | PASS |
-| Direct public App Service request rejected | PASS for intended restriction |
+| Private DNS resolution from test VM | PASS |
+| Test VM to App Service through private endpoint | PASS |
+| Tested direct public App Service request rejected | PASS for intended restriction |
 | Application Gateway backend health | PASS |
-| Gateway endpoint returns HTTP 200 | PASS; certificate validation bypassed |
-| VM outbound HTTPS connectivity | PASS |
+| Gateway endpoint returns HTTP 200 | PASS; certificate validation was bypassed |
+| Test VM outbound HTTPS connectivity | PASS |
+| App Service VNet Integration to a private resource | Not yet tested |
+| Trusted certificate and gateway hostname validation | Not yet validated |
 
 ## 8. App Service VNet Integration vs. Private Endpoint
 
-These two features serve different purposes and should not be confused.
+These features serve different purposes and should not be confused.
 
-### App Service VNet integration
+### App Service VNet Integration
 
-- Allows the App Service to make outbound connections into a virtual network.
+- Allows App Service to make outbound connections into a virtual network.
 - Can be used to reach supported private resources such as internal APIs, databases, or VMs.
 - Uses a designated integration subnet.
 
 ### App Service Private Endpoint
 
-- Provides a private inbound access path from the virtual network to the App Service.
+- Provides a private inbound access path from the virtual network to App Service.
 - Assigns a private IP address to the endpoint.
 - Uses private DNS to direct clients to that private address.
 
-In this lab, the VM-to-App-Service test validates the private endpoint and DNS path.
-
-A separate test is needed to prove App Service VNet integration. For example, the web application can attempt to reach a test service available only inside the VNet, and the result can be checked through application logs or an appropriate connectivity test.
+In this lab, the VM-to-App-Service test validates the private endpoint and DNS path. A separate test is needed to validate App Service VNet Integration. For example, the web application could attempt to reach a test service available only inside the VNet, with the result confirmed through application logs or an appropriate connectivity test.
 
 ## 9. Security Considerations
 
 - Use HTTPS for both client-to-gateway and gateway-to-backend traffic.
-- Use a trusted TLS certificate for the intended production hostname.
-- Protect the certificate's private key and password.
-- Disable direct public App Service access when the design requires the gateway to be the only public entry point.
+- Use a trusted TLS certificate for the intended gateway hostname and validate the backend TLS configuration.
+- Protect certificate private keys and passwords.
+- Disable direct public App Service access when the design requires Application Gateway to be the only public entry point.
 - Confirm private DNS resolution from the relevant network context.
-- Keep the Application Gateway in a dedicated subnet.
+- Keep Application Gateway in a dedicated subnet.
 - Use least-privilege Azure permissions.
 - Avoid storing credentials and secrets in Git.
-- Review Azure resource costs before deploying or leaving the lab running.
+- Review Azure resource costs before deployment and while the lab is running.
 
 A private endpoint does not automatically disable public App Service access. Public access restrictions must be configured and tested separately.
 
@@ -361,7 +361,7 @@ Check:
 Check:
 
 - The backend FQDN.
-- Private DNS resolution from the gateway's network context.
+- Private DNS resolution from Application Gateway's network context.
 - Private endpoint approval and connectivity.
 - Backend HTTPS port 443.
 - The health probe hostname and path.
@@ -377,7 +377,7 @@ Check the App Service networking configuration and access restrictions to identi
 
 Run:
 
-```powershell
+```bash
 terraform plan
 ```
 
@@ -393,13 +393,13 @@ After completing lab exercises, remove the infrastructure when it is no longer r
 
 From the project directory:
 
-```powershell
+```bash
 terraform plan -destroy
 ```
 
 Review the proposed destruction. If the resources are safe to remove:
 
-```powershell
+```bash
 terraform destroy
 ```
 
@@ -411,9 +411,9 @@ Destroying the lab removes the managed infrastructure and may release its public
 
 This lab helped reinforce the following Azure architecture concepts:
 
-1. How Terraform provisions Azure resources using reusable variables and resource references.
-2. How a virtual network and dedicated subnets support application architecture.
-3. The difference between App Service VNet integration and private endpoints.
+1. How Terraform provisions Azure resources using variables and resource references.
+2. How a virtual network and dedicated subnets support an application architecture.
+3. The difference between App Service VNet Integration and private endpoints.
 4. How private DNS maps an App Service hostname to a private endpoint IP.
 5. How Application Gateway provides a public entry point for HTTPS traffic.
 6. How listeners, certificates, backend pools, health probes, backend settings, and routing rules work together.
@@ -422,12 +422,17 @@ This lab helped reinforce the following Azure architecture concepts:
 9. Why certificate validation and public access restrictions must be tested explicitly.
 10. How Terraform plan, apply, outputs, and destroy support the infrastructure lifecycle.
 
+<<<<<<< Updated upstream
 ### Potential Improvements for a Future Iteration
+=======
+## 13. Potential Improvements for a Future Iteration
+>>>>>>> Stashed changes
 
 The following improvements could strengthen the security, availability, monitoring, and operational readiness of this lab for a production scenario:
 
 - **Security:** Evaluate Application Gateway WAF policies, trusted end-to-end TLS certificate validation, secure certificate management with Azure Key Vault, and restrictive Network Security Group (NSG) rules.
 - **High availability:** Evaluate zone-redundant App Service hosting, multiple instances, and Application Gateway availability-zone configuration.
+<<<<<<< Updated upstream
 - **Connectivity validation:** Add an explicit outbound connectivity test from App Service to a private resource to validate VNet integration.
 - **Application health:** Implement a dedicated application health endpoint and validate health probe behavior.
 - **Monitoring and diagnostics:** Configure Azure Monitor, diagnostic settings, application monitoring, and alerts for Application Gateway and App Service.
@@ -437,16 +442,28 @@ The following improvements could strengthen the security, availability, monitori
 - **Architecture review:** Assess the design against Azure Well-Architected Framework principles, particularly security, reliability, operational excellence, performance efficiency, and cost optimization.
 
 These items are future design considerations, not outstanding requirements for this cost-conscious learning lab. They have not necessarily been implemented or validated, and would be evaluated based on production requirements, service support, and cost.
+=======
+- **Connectivity validation:** Add an explicit outbound connectivity test from App Service to a private resource to validate VNet Integration.
+- **Application health:** Implement a dedicated application health endpoint and validate health probe behavior.
+- **Monitoring and diagnostics:** Configure Azure Monitor, diagnostic settings, application monitoring, and alerts for Application Gateway and App Service.
+- **Identity and governance:** Evaluate managed identities, least-privilege access, and Azure Policy.
+- **Terraform improvements:** Document the VNet address space and subnet CIDR ranges from the actual configuration, improve outputs and resource tags, and review configuration maintainability.
+- **Documentation and testing:** Improve the architecture diagram and add screenshots of backend health and connectivity tests where useful.
+- **Architecture review:** Assess the design against Azure Well-Architected Framework principles: reliability, security, cost optimization, operational excellence, and performance efficiency.
+
+These are future design considerations, not outstanding requirements for this cost-conscious learning lab. They have not necessarily been implemented or validated and would be evaluated against production requirements, service support, and cost.
+
+**Reference architecture:** [Microsoft Learn — Baseline Highly Available Zone-Redundant App Service Architecture](https://learn.microsoft.com/en-us/azure/architecture/web-apps/app-service/architectures/baseline-zone-redundant)
+>>>>>>> Stashed changes
 
 ## 14. Project Status
 
-**Core infrastructure deployed and connectivity tested.**
+**Status:** Core infrastructure deployed and key connectivity paths tested.
 
 The lab has demonstrated private endpoint access from the Linux test VM, private DNS resolution, a healthy Application Gateway backend, successful access through the gateway, rejection of the tested direct public App Service request, and outbound HTTPS connectivity from the VM.
 
-Remaining validation includes a dedicated test for App Service VNet integration and full certificate and hostname validation for the public gateway endpoint.
+Remaining validation includes a dedicated test for App Service VNet Integration and full certificate and hostname validation for the public gateway endpoint.
 
 ---
 
-**Repository:** `Terraform-Azure -Lab/01-secure-web-app`
-
+**Repository:** [`cloud-solution-architecture-portfolio/01-secure-web-app`](https://github.com/AnushakrishnaB/cloud-solution-architecture-portfolio/tree/main/01-secure-web-app)
