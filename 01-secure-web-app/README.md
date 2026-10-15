@@ -422,20 +422,21 @@ This lab helped reinforce the following Azure architecture concepts:
 9. Why certificate validation and public access restrictions must be tested explicitly.
 10. How Terraform plan, apply, outputs, and destroy support the infrastructure lifecycle.
 
-## 13. Future Improvements
+### Potential Improvements for a Future Iteration
 
-Potential improvements for a future iteration:
+The following improvements could strengthen the security, availability, monitoring, and operational readiness of this lab for a production scenario:
 
-- Validate App Service VNet integration with an explicit outbound-to-private-resource test.
-- Configure a trusted TLS certificate and test the gateway hostname without bypassing certificate validation.
-- Document the exact VNet address space and CIDR ranges for each subnet.
-- Add more useful Terraform outputs and resource tags.
-- Evaluate Application Gateway Web Application Firewall (WAF) capabilities.
-- Add a dedicated application health endpoint.
-- Add monitoring and diagnostic settings for the gateway and App Service.
-- Evaluate secure secret management for certificate material.
-- Add a deployment diagram and screenshots of backend health and connectivity tests.
-- Review the design against Azure Well-Architected Framework principles.
+- **Security:** Evaluate Application Gateway WAF policies, trusted end-to-end TLS certificate validation, secure certificate management with Azure Key Vault, and restrictive Network Security Group (NSG) rules.
+- **High availability:** Evaluate zone-redundant App Service hosting, multiple instances, and Application Gateway availability-zone configuration.
+- **Connectivity validation:** Add an explicit outbound connectivity test from App Service to a private resource to validate VNet integration.
+- **Application health:** Implement a dedicated application health endpoint and validate health probe behavior.
+- **Monitoring and diagnostics:** Configure Azure Monitor, diagnostic settings, application monitoring, and alerts for Application Gateway and App Service.
+- **Identity and governance:** Evaluate managed identities, least-privilege access, and Azure Policy.
+- **Terraform improvements:** Document VNet address spaces and subnet CIDR ranges, improve outputs and resource tagging, and review infrastructure configuration for maintainability.
+- **Documentation and testing:** Add deployment diagrams, screenshots of backend health and connectivity tests, and documented validation results.
+- **Architecture review:** Assess the design against Azure Well-Architected Framework principles, particularly security, reliability, operational excellence, performance efficiency, and cost optimization.
+
+These items are future design considerations, not outstanding requirements for this cost-conscious learning lab. They have not necessarily been implemented or validated, and would be evaluated based on production requirements, service support, and cost.
 
 ## 14. Project Status
 
